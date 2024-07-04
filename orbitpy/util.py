@@ -269,17 +269,18 @@ class SpacecraftBus(Entity):
     :vartype _id: str
     
     """
-    def __init__(self, name=None, mass=None, volume=None, orientation=None, solarPanelConfig=None, _id=None):
+    def __init__(self, name=None, mass=None, volume=None, orientation=None, solarPanelConfig=None, components=None, _id=None):
 
         self.name = str(name) if name is not None else None
         self.mass = float(mass) if mass is not None else None
         self.volume = float(volume) if volume is not None else None
         self.orientation = orientation if orientation is not None and isinstance(orientation, Orientation) else None
         self.solarPanelConfig = solarPanelConfig if solarPanelConfig is not None else None
+        self.components = components if components is not None else None 
         super(SpacecraftBus, self).__init__(_id, "SpacecraftBus")   
 
     @staticmethod
-    def from_dict(d):
+    def from_dict(d : dict):
         """ Parses ``SpacecraftBus`` object from a dictionary.
 
         :param d: Dictionary with the spacecraft bus properties.
@@ -295,6 +296,7 @@ class SpacecraftBus(Entity):
                 volume = d.get("volume", None),
                 solarPanelConfig = d.get("solarPanelConfig", None),
                 orientation = Orientation.from_json(d.get("orientation", default_orien)),
+                components = d.get('components',None), #TODO create class for components
                 _id = d.get("@id", None)
                 )
 
