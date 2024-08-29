@@ -3,7 +3,6 @@
 import unittest
 
 import numpy as np
-from numpy.core.numeric import tensordot
 from instrupy.util import Orientation
 from instrupy import Instrument
 from orbitpy.util import OrbitState, SpacecraftBus, Spacecraft
@@ -21,6 +20,10 @@ class TestOrbitState(unittest.TestCase):
         y = OrbitState.date_from_dict({"@type":"GREGORIAN_UT1", "year":2021, "month":2, "day":25, "hour":6, "minute":0, "second":0})
         self.assertIsInstance(y, propcov.AbsoluteDate)
 
+        with self.assertRaises(Exception): # Invalid Date Type shall raise Exception
+            OrbitState.date_from_dict({"@type":"GREGORIAN_UTC", "year":2021, "month":2, "day":25, "hour":6, "minute":0, "second":0})
+        
+
         self.assertEqual(x, y)
 
     def test_state_from_dict(self):
@@ -33,7 +36,7 @@ class TestOrbitState(unittest.TestCase):
         self.assertIsInstance(y, propcov.OrbitState) 
 
         self.assertEqual(x, y)
-
+ 
     def test_date_to_dict(self): #@TODO
         pass
 
@@ -68,6 +71,99 @@ class TestOrbitState(unittest.TestCase):
         self.assertEqual(o.date, propcov.AbsoluteDate.fromGregorianDate(2021, 2, 25, 6 ,0, 0))
         self.assertEqual(o.state, propcov.OrbitState.fromKeplerianState(6878.137, 0.001, np.deg2rad(45), np.deg2rad(35), np.deg2rad(145), np.deg2rad(-25)))
     
+    def test_state_from_dict_tle(self):
+  
+        d = {   "@type": "TLE",
+                "tle_line0": "AQUA",
+                "tle_line1": "1 27424U 02022A   24052.86568623  .00001525  00000-0  33557-3 0  9991",
+                "tle_line2": "2 27424  98.3176   1.9284 0001998  92.8813 328.6214 14.58896689159754",
+                "@id": 123}
+        
+        o = OrbitState.from_dict(d)
+        self.assertIsInstance(o, OrbitState)
+
+        self.assertEqual(o._id, 123)
+        self.assertAlmostEqual(o.get_julian_date(), 2460362.365686, places=6)
+        state_dict = OrbitState.state_to_dict(o.state, state_type='CARTESIAN_EARTH_CENTERED_INERTIAL')
+
+        self.assertAlmostEqual(state_dict["x"], 3417.50458485)
+        self.assertAlmostEqual(state_dict["y"], -802.52409303)
+        self.assertAlmostEqual(state_dict["z"], 6134.36342655)
+        self.assertAlmostEqual(state_dict["vx"], -6.5733887)
+        self.assertAlmostEqual(state_dict["vy"], -0.70421461)
+        self.assertAlmostEqual(state_dict["vz"], 3.56159903)
+
+        # Terra SAR-X
+        # Compare against the mean Keplerian elements given in the Orbit Mean-Elements Message (OMM) from www.space-track.org. 
+        # Note that the TLE info is also sourced from the same OMM. 
+        d = {"@type": "TLE",
+             "tle_line0": "Terra SAR X",
+             "tle_line1":   "1 31698U 07026A   24099.48501970  .00001689  00000-0  83603-4 0  9998",
+             "tle_line2":   "2 31698  97.4452 107.6258 0001796  88.6052 271.5388 15.19151402932479",
+             "@id": 123}
+        
+        o = OrbitState.from_dict(d)
+        self.assertIsInstance(o, OrbitState)
+
+        self.assertEqual(o._id, 123)
+        self.assertAlmostEqual(o.get_julian_date(), 2460408.985020, places=6)
+        state_dict = OrbitState.state_to_dict(o.state, state_type='KEPLERIAN_EARTH_CENTERED_INERTIAL')
+
+        self.assertAlmostEqual(state_dict["sma"], 6886.541, delta=10e3) # 10k error tolerance
+        self.assertAlmostEqual(state_dict["ecc"], 0.00017960, delta=0.0012) # TODO: This appears to be a large error....
+        self.assertAlmostEqual(state_dict["inc"], 97.4452, delta = 0.2)
+        self.assertAlmostEqual(state_dict["raan"], 107.6258, delta = 0.4)
+
+        # The AOP has large errors, which maybe OK for near-circular orbits in which the AOP is not defined well. 
+        # AOP + TA shall give the satellite position wrt the ascending node. 
+        # Note that the Mean ANnomaly value is given in the OMM (i.e. 88.6052 degrees), which is ~ TA since the orbit is nearly circular
+        self.assertAlmostEqual(state_dict["ta"] + state_dict["aop"], 271.5388 + 88.6052, delta = 0.2)
+
+    def test_state_from_dict_omm(self):
+
+        # Terra SAR-X
+        d = {"@type": "OMM",
+             "omm": {
+                        "CCSDS_OMM_VERS": "2.0", "COMMENT": "GENERATED VIA SPACE-TRACK.ORG API",
+                        "CREATION_DATE": "2024-04-08T19:28:18", "ORIGINATOR": "18 SPCS",
+                        "OBJECT_NAME": "TERRA SAR X", "OBJECT_ID": "2007-026A",
+                        "CENTER_NAME": "EARTH", "REF_FRAME": "TEME",
+                        "TIME_SYSTEM": "UTC", "MEAN_ELEMENT_THEORY": "SGP4",
+                        "EPOCH": "2024-04-08T11:38:25.702080", "MEAN_MOTION": "15.19151402",
+                        "ECCENTRICITY": "0.0001796", "INCLINATION": "97.4452",
+                        "RA_OF_ASC_NODE": "107.6258", "ARG_OF_PERICENTER": "88.6052",
+                        "MEAN_ANOMALY": "271.5388", "EPHEMERIS_TYPE": "0",
+                        "CLASSIFICATION_TYPE": "U", "NORAD_CAT_ID": "31698",
+                        "ELEMENT_SET_NO": "999", "REV_AT_EPOCH": "93181",
+                        "BSTAR": "0.000083603", "MEAN_MOTION_DOT": "0.00001689",
+                        "MEAN_MOTION_DDOT": "0",
+                        "TLE_LINE0": "0 TERRA SAR X",
+                        "TLE_LINE1": "1 31698U 07026A   24099.48501970  .00001689  00000-0  83603-4 0  9998",
+                        "TLE_LINE2": "2 31698  97.4452 107.6258 0001796  88.6052 271.5388 15.19151402931816",
+                        "SEMIMAJOR_AXIS": "6886.541", "PERIOD": "94.790", "APOAPSIS": "509.643", "PERIAPSIS": "507.169",
+                        "OBJECT_TYPE": "PAYLOAD", "DECAYED": "0"
+                    },
+             "@id": 123}
+        
+        o = OrbitState.from_dict(d)
+        self.assertIsInstance(o, OrbitState)
+
+        self.assertEqual(o._id, 123)
+        self.assertAlmostEqual(o.get_julian_date(), 2460408.985020, places=6)
+        state_dict = OrbitState.state_to_dict(o.state, state_type='KEPLERIAN_EARTH_CENTERED_INERTIAL')
+
+        # Compare against the mean Keplerian elements given in the Orbit Mean-Elements Message (OMM) from www.space-track.org
+        # Note that the TLE info is also sourced from the same OMM. 
+        self.assertAlmostEqual(state_dict["sma"], 6886.541, delta=10e3) # 10k error tolerance
+        self.assertAlmostEqual(state_dict["ecc"], 0.00017960, delta=0.0012) # TODO: This appears to be a large error....
+        self.assertAlmostEqual(state_dict["inc"], 97.4452, delta = 0.2)
+        self.assertAlmostEqual(state_dict["raan"], 107.6258, delta = 0.4)
+
+        # The AOP has large errors, which maybe OK for near-circular orbits in which the AOP is not defined well. 
+        # AOP + TA shall give the satellite position wrt the ascending node. 
+        # Note that the Mean Anomaly value is given in the OMM (i.e. 88.6052 degrees), which is ~ TA since the orbit is nearly circular
+        self.assertAlmostEqual(state_dict["ta"] + state_dict["aop"], 271.5388 + 88.6052, delta = 0.2)
+
     def test_to_dict(self): #@TODO test Keplerian state output
         # Input: Julian date, Cartesian state
         o = OrbitState.from_dict({"date":{"@type":"JULIAN_DATE_UT1", "jd":2459270.75}, 

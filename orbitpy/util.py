@@ -10,6 +10,11 @@ import uuid
 from collections import namedtuple
 import pandas as pd
 
+import requests
+import json
+
+from skyfield.api import EarthSatellite, load # Skyfield package is used to convert the TLEs to ECI coords at a specified epoch.
+
 import propcov
 from instrupy.util import Entity, EnumEntity, Constants, Orientation
 from instrupy.base import Instrument
@@ -24,6 +29,8 @@ class StateType(EnumEntity):
     KEPLERIAN_EARTH_CENTERED_INERTIAL = "KEPLERIAN_EARTH_CENTERED_INERTIAL"
     CARTESIAN_EARTH_CENTERED_INERTIAL = "CARTESIAN_EARTH_CENTERED_INERTIAL"
     CARTESIAN_EARTH_FIXED = "CARTESIAN_EARTH_FIXED"
+    TLE = "TLE"
+    OMM = "OMM"
 
 class DateType(EnumEntity):
     GREGORIAN_UT1 = "GREGORIAN_UT1"
@@ -63,8 +70,18 @@ class OrbitState(Entity):
         :rtype: :class:`orbitpy.util.OrbitState`
 
         """
-        date = OrbitState.date_from_dict(d.get("date", None))
-        state = OrbitState.state_from_dict(d.get("state", None))
+        if "@type" in d: # the orbit-state and date are together in the format of TLE or OMM.
+            stateType = d.get('@type', None)
+            state_type = StateType.get(stateType) if stateType is not None else None
+            if state_type == StateType.TLE:
+                (date, state) = OrbitState.from_tle(d)
+            elif state_type == StateType.OMM:
+                (date, state) = OrbitState.from_omm(d.get("omm"))
+            else:
+                raise Exception("Unrecognized type in the 'orbitstate' dictionary key.")
+        else:
+            date = OrbitState.date_from_dict(d.get("date", None))
+            state = OrbitState.state_from_dict(d.get("state", None))
 
         return OrbitState(date=date, state=state, _id=d.get("@id", None))
 
@@ -142,6 +159,8 @@ class OrbitState(Entity):
                     date.SetJulianDate(jd=d["jd"])
                 except:
                     raise Exception("Something wrong in setting of Julian UT1 date object. Check that the jd key/value pair has been specified in the input dictionary.")
+            else:
+                raise Exception("Please specify correct Date Type")
         else:
             raise Exception("Please specify a date.")
         
@@ -199,6 +218,93 @@ class OrbitState(Entity):
             raise Exception("Please enter a state-type (@type) specification.")
 
         return state
+
+    @staticmethod
+    def from_tle(tle_dict):
+        """ Get the ``propcov.AbsoluteDate`` and ``propcov.OrbitState`` objects from an input Two Line Element (TLE)
+
+        :param tle_dict: Dictionary with the TLE.
+            
+            The following keys apply:
+
+            * tle_line0 : (str) TLE line 0 string. The first line contains the satellite name, and the next two lines are the two line elements.
+            * tle_line1 : (str) TLE line 1 string. 
+            * tle_line2 : (str) TLE line 2 string. 
+
+            e.g., 
+                {
+                    "tle_line0": "AQUA",
+                    "tle_line1": "27424U 02022A   24052.86568623  .00001525  00000-0  33557-3 0  9991",
+                    "tle_line2": "2 27424  98.3176   1.9284 0001998  92.8813 328.6214 14.58896689159754"
+                }
+
+        :paramtype tle_dict: dict
+
+        :returns: ``propcov`` date object and state objects.
+        :rtype: :class:`propcov.AbsoluteDate`, :class:`propcov.OrbitState`
+
+        """
+        date = propcov.AbsoluteDate()
+        state = propcov.OrbitState()
+        try:                 
+            # Use Skyfield library
+            ts = load.timescale()
+
+            # Parse TLE string
+            satellite = EarthSatellite(tle_dict["tle_line1"], tle_dict["tle_line2"], tle_dict["tle_line0"], ts)
+
+            #print(satellite)
+            
+            # What is the time scale in the time indicated in the TLE?
+            # "time is either in UTC or UT1, and conclude that the difference does not really matter because SGP4 just isn't accurate enough in predicting satellite positions for <1 second to matter."
+            # Refer to the paper here: https://celestrak.org/publications/AIAA/2006-6753/
+            # https://space.stackexchange.com/questions/13825/how-to-obtain-utc-of-the-epoch-time-in-a-satellite-tle-two-line-element
+            tle_epoch = satellite.epoch
+            tle_geocentric = satellite.at(tle_epoch) # Position is in GCRS (ECI) coordinates. GCRS ~ J2000, and is treated as the same in OrbitPy
+                                                     # Following link documents that the position is in GCRS coordinates: https://rhodesmill.org/skyfield/earth-satellites.html
+
+            pos = tle_geocentric.position.km
+            vel = tle_geocentric.velocity.km_per_s
+
+            #print(tle_epoch.ut1)
+            #print(satellite.epoch.utc_jpl())
+            #print(pos)
+            #print(vel)
+            
+            date.SetJulianDate(jd=tle_epoch.ut1)
+            state.SetCartesianState(propcov.Rvector6([pos[0], pos[1], pos[2], vel[0], vel[1], vel[2]]))
+
+        except:
+            raise Exception("Error while setting the orbit state from TLE")
+        
+        return (date, state)
+    
+    @staticmethod
+    def from_omm(omm_dict):
+        """ Process orbital data from the Orbit Mean-Elements Message (OMM) format.
+            Processing is carried out by extracting the TLEs from the OMM, and then using the ``from_tle()`` function.
+        
+            Space-Track.org and Celestrak.com recommend that developers migrate their software to use the OMM standard 
+            (displayed in /class/gp/ as the /format/xml/) for all GP ephemerides because, again, legacy fixed-width TLE 
+            or 3LE format lacks support for numbers above 99,999.
+
+            :param omm_dict: Keplerian element set in Orbit Mean-Elements Message (OMM) that complies with CCSDS Recommended Standard 502.0-B-3.    
+                             For an example run this query on a browser: https://www.space-track.org/basicspacedata/query/class/gp/norad_cat_id/25544/format/json
+            :paramtype omm_dict: dict
+
+            :returns: ``propcov`` date object and state objects.
+            :rtype: :class:`propcov.AbsoluteDate`, :class:`propcov.OrbitState`
+
+        """
+        tle_dict = {
+                    "tle_line0": omm_dict["TLE_LINE0"],
+                    "tle_line1": omm_dict["TLE_LINE1"],
+                    "tle_line2": omm_dict["TLE_LINE2"]
+                }
+        (date, state) = OrbitState.from_tle(tle_dict)
+        return (date, state)
+
+
     
     @staticmethod
     def date_to_dict(date):
@@ -885,3 +991,74 @@ class OutputInfoUtility:
                     del out_info_list[indx] # delete the corresponding output-info object
         
         return out_info_list
+    
+class SpaceTrackAPI:
+    """ Class which enables interface to SpaceTrack.org and the retreival of the most recent 
+    available satellite orbit data close to a given target date. Note that the data is available
+    at a latency from the time of measurement of the satellite state.
+
+    Initialize SpaceTrackAPI instance with credentials from a JSON file in the following format: 
+    {
+        "username": "xxxx",
+        "password":  "xxxx"
+    }
+    """
+    def __init__(self, credentials_file):
+        with open(credentials_file, 'r') as file:
+            credentials = json.load(file)
+        self.username = credentials.get('username')
+        self.password = credentials.get('password')
+        self.session = None
+
+    def login(self):
+        # URL for the login page
+        login_url = "https://www.space-track.org/ajaxauth/login"
+
+        # Payload data for the login request
+        payload = {
+            "identity": self.username,
+            "password": self.password,
+        }
+
+        # Create a session to persist cookies across requests
+        self.session = requests.Session()
+
+        # Send a POST request to the login URL with the payload data
+        response = self.session.post(login_url, data=payload)
+
+        # Check if the login was successful (status code 200)
+        if response.status_code == 200:
+            print("Login successful")
+        else:
+            print("Login failed")
+
+    def get_closest_omm(self, norad_id, target_datetime):
+        if not self.session:
+            print("Session not initialized. Please login first.")
+            return
+
+        # URL to retrieve the closest availalble OMM (see the CREATION_DATE and not the EPOCH_DATE) for the specified satellite closest to the target datetime
+        omm_url = f"https://www.space-track.org/basicspacedata/query/class/omm/NORAD_CAT_ID/{norad_id}/CREATION_DATE/<{target_datetime}/orderby/EPOCH%20desc/limit/1/format/json"
+
+        # Send a GET request to retrieve the closest OMM data
+        response = self.session.get(omm_url)
+
+        # Check if the request was successful (status code 200)
+        if response.status_code == 200:
+            print(f"Closest *available* OMM data for satellite with NORAD ID {norad_id} *at* {target_datetime}:")
+            closest_omm = response.json()
+            if closest_omm:
+                print(json.dumps(closest_omm, indent=4))
+            else:
+                print("No OMM found")
+        else:
+            print(f"Failed to retrieve closest OMM data for satellite with NORAD ID {norad_id}")
+
+    def logout(self):
+        if not self.session:
+            print("Session not initialized.")
+            return
+
+        # Clear session cookies
+        self.session.cookies.clear()
+        print("Logged out successfully")
