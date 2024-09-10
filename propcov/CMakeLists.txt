@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.4...3.18)
 
+# THIS HAS TO COME BEFORE THE PROJECT LINE
+set(CMAKE_C_COMPILER "gcc-11")
+set(CMAKE_CXX_COMPILER "g++-11")
+# THIS HAS TO COME BEFORE THE PROJECT LINE
+
 project(propcov)
 
 # Enforce C++ Standard. C++17 is preferred.
