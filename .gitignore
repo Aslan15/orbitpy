@@ -51,3 +51,6 @@ TBD/examples/exampleTest/*
 TBD/examples/20201102_500kmSAR/*
 
 !tests/test_data/*
+
+# python environments
+.venv
