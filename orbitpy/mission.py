@@ -8,6 +8,8 @@ import os, shutil
 import warnings
 from collections import namedtuple
 
+from tqdm import tqdm
+
 from instrupy.util import Entity
 from instrupy.base import Instrument
 import propcov
@@ -593,7 +595,7 @@ class Mission(Entity):
     def __repr__(self):
         return "Mission.from_dict({})".format(self.to_dict())
 
-    def execute(self):
+    def execute(self, orbit_propagation=True, coverage_propagation=True, data_metrics_calculation=True, gs_contact_finder=True, intersat_contact_finder=True, eclipse_finder=True):
         """ Execute a mission where all the spacecrafts are propagated, (field-of-regard) coverage calculated for all spacecraft-instrument-modes, 
             ground-station contact-periods computed between all spacecraft-ground-station pairs and intersatellite contact-periods
             computed for all possible spacecraft pairs.
@@ -609,46 +611,46 @@ class Mission(Entity):
         out_info = [] # list to accumulate info objects of the various executions        
 
         # Save auto-grids to files
+        # print("Saving auto-grid files...")
         x = self.save_auto_grid()
-        if x:
-            out_info.extend(x)
-        print("Finished save auto grid")
+        if x:out_info.extend(x)
+        # print("Finished save auto grid")
 
         # execute orbit propagation for all satellites in the mission
-        x = self.execute_propagation()
-        if x:
-            out_info.extend(x)
-        print("Finished orbit-propagation.")
+        # if orbit_propagation: print("Executing orbit-propagation...")
+        x = self.execute_propagation() if orbit_propagation else None
+        if x: out_info.extend(x)
+        # if orbit_propagation: print("Finished orbit-propagation.")
 
         # Execute coverage calculation for all the spacecrafts (and their instruments and modes) in the mission.
-        x = self.execute_coverage_calculator()
-        if x:
-            out_info.extend(x)
-        print("Finished coverage calculation.")
+        # if coverage_propagation: print("Executing coverage calculation...")
+        x = self.execute_coverage_calculator() if coverage_propagation else None
+        if x: out_info.extend(x)
+        # if coverage_propagation: print("Finished coverage calculation.")
 
         # execute datametrics calculation for all the spacecrafts (and their instruments and modes) in the mission.
-        x = self.execute_datametrics_calculator()
-        if x:
-            out_info.extend(x)
-        print("Finished datametrics calculation.")
+        # if data_metrics_calculation: print("Executing datametrics calculation...")
+        x = self.execute_datametrics_calculator() if data_metrics_calculation else None
+        if x: out_info.extend(x)
+        # if data_metrics_calculation: print("Finished datametrics calculation.")
 
         # execute ground-station contact finder for all the spacecrafts
-        x = self.execute_groundstation_contact_finder()
-        if x:
-            out_info.extend(x)
-        print("Finished finding ground-station contacts.")
+        # if gs_contact_finder: print("Executing ground-station contact finding...")
+        x = self.execute_groundstation_contact_finder() if gs_contact_finder else None
+        if x: out_info.extend(x)
+        # if gs_contact_finder: print("Finished finding ground-station contacts.")
 
         # find inter-satellite contacts between all the satellites in the mission
-        x = self.execute_intersatellite_contact_finder()
-        if x:
-            out_info.extend(x)
-        print("Finished finding inter-satellite contacts.")
+        # if intersat_contact_finder: print("Executing inter-satellite contact finding...")
+        x = self.execute_intersatellite_contact_finder() if intersat_contact_finder else None
+        if x: out_info.extend(x)
+        # if intersat_contact_finder: print("Finished finding inter-satellite contacts.")
 
         # find eclipse times
-        x = self.execute_eclipse_finder()
-        if x:
-            out_info.extend(x)
-        print("Finished finding eclipse periods.")
+        # if eclipse_finder: print("Executing eclipse finding...")
+        x = self.execute_eclipse_finder() if eclipse_finder else None
+        if x: out_info.extend(x)
+        # if eclipse_finder: print("Finished finding eclipse periods.")
     
         return out_info
             
@@ -659,7 +661,7 @@ class Mission(Entity):
 
         if self.grid:
             # Save auto-grids to files
-            for grid_idx, grid in enumerate(self.grid):
+            for grid_idx, grid in tqdm(enumerate(self.grid), desc="Saving auto-grid files", unit="grid"):
                 if grid.filepath is None: # must be an auto-grid configuration, so filepath instance variable is None
                     fp = self.settings.outDir + '/grid' + str(grid_idx) + '.csv' # save the file with name according to the index.
                     x = grid.write_to_file(fp)
@@ -678,7 +680,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # execute orbit propagation for all satellites in the mission
-        for spc_idx, spc in enumerate(self.spacecraft):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing orbit propagation", unit="sat"):
             
             # make satellite directory
             sat_dir = self.settings.outDir + '/sat' + str(spc_idx) + '/'
@@ -713,7 +715,7 @@ class Mission(Entity):
         os.makedirs(intersat_comm_dir)
 
         # Iterate over all spacecrafts in the mission. If the state-file of a spacecraft cannot be located then the spacecraft is not considered.
-        for spc1_idx in range(0, len(self.spacecraft)):
+        for spc1_idx in tqdm(range(0, len(self.spacecraft)), desc="Finding inter-satellite contacts", unit="sat"):
             spc1 = self.spacecraft[spc1_idx]
             spc1_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -725,7 +727,7 @@ class Mission(Entity):
             spc1_state_cart_file = spc1_prop_out_info.stateCartFile
             
             # loop over the rest of the spacecrafts in the list (i.e. from the current spacecraft to the last spacecraft in the list)
-            for spc2_idx in range(spc1_idx+1, len(self.spacecraft)):
+            for spc2_idx in tqdm(range(spc1_idx+1, len(self.spacecraft)), desc=f"Evaluating contacts for `SAT{spc1_idx}`", unit="sat", leave=False):
                 
                 spc2 = self.spacecraft[spc2_idx]
                 spc2_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
@@ -758,7 +760,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in enumerate(self.spacecraft):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding ground-station contacts", unit="sat"):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -772,7 +774,7 @@ class Mission(Entity):
 
             # loop over all the ground-stations and calculate contacts
             if self.groundStation:
-                for gnd_stn_idx, gnd_stn in enumerate(self.groundStation):
+                for gnd_stn_idx, gnd_stn in tqdm(enumerate(self.groundStation), desc="Evaluating contacts", unit="ground-station", leave=False):
                     
                     out_gnd_stn_file = 'gndStn'+str(gnd_stn_idx)+'_contacts.csv'
                     x = ContactFinder.execute(spc, gnd_stn, spc_dir, spc_state_cart_file, None, out_gnd_stn_file, ContactFinder.OutType.INTERVAL, 0)
@@ -795,7 +797,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in enumerate(self.spacecraft):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding eclipse periods", unit="sat"):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -828,7 +830,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in enumerate(self.spacecraft):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing coverage calculation", unit="sat"):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -893,7 +895,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in enumerate(self.spacecraft):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing data-metrics calculation", unit="sat"):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -916,7 +918,7 @@ class Mission(Entity):
                             if self.grid is None:
                                 warnings.warn('Grid not specified, skipping Grid Coverage, Data metrics calculations.')
                                 continue
-                            for grid_idx, grid in enumerate(self.grid):     
+                            for grid_idx, grid in tqdm(enumerate(self.grid), desc="Calculating grid data-metrics", unit="grid", leave=False):
 
                                 cov_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.CoverageOutputInfo.value, 
@@ -933,7 +935,7 @@ class Mission(Entity):
                             if self.grid is None:
                                 warnings.warn('Grid not specified, skipping Grid Coverage, Data metrics calculations.')
                                 continue
-                            for grid_idx, grid in enumerate(self.grid):     
+                            for grid_idx, grid in tqdm(enumerate(self.grid), desc="Calculating grid data-metrics", unit="grid", leave=False):
 
                                 cov_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.CoverageOutputInfo.value, 
