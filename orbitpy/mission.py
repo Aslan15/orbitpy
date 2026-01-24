@@ -246,7 +246,7 @@ class Mission(Entity):
         if prop_dict.get("stepSize") is None: # i.e. user has not specified step-size
             prop_dict["stepSize"] = time_step # use the autocalculate step-size
         if prop_dict.get("stepSize") > time_step:
-            warnings.warn('User given step-size is greater than auto calculated step-size.')
+            warnings.warn(f'User given step-size ({round(prop_dict.get("stepSize"),3)} [s]) is greater than auto calculated step-size ({round(time_step,3)} [s]).')
         propagator = factory.get_propagator(prop_dict) 
 
         # parse grid        
@@ -595,7 +595,7 @@ class Mission(Entity):
     def __repr__(self):
         return "Mission.from_dict({})".format(self.to_dict())
 
-    def execute(self, orbit_propagation=True, coverage_propagation=True, data_metrics_calculation=True, gs_contact_finder=True, intersat_contact_finder=True, eclipse_finder=True):
+    def execute(self, orbit_propagation=True, coverage_propagation=True, data_metrics_calculation=True, gs_contact_finder=True, intersat_contact_finder=True, eclipse_finder=True, leave=False):
         """ Execute a mission where all the spacecrafts are propagated, (field-of-regard) coverage calculated for all spacecraft-instrument-modes, 
             ground-station contact-periods computed between all spacecraft-ground-station pairs and intersatellite contact-periods
             computed for all possible spacecraft pairs.
@@ -612,56 +612,56 @@ class Mission(Entity):
 
         # Save auto-grids to files
         # print("Saving auto-grid files...")
-        x = self.save_auto_grid()
+        x = self.save_auto_grid(leave=leave)
         if x:out_info.extend(x)
         # print("Finished save auto grid")
 
         # execute orbit propagation for all satellites in the mission
         # if orbit_propagation: print("Executing orbit-propagation...")
-        x = self.execute_propagation() if orbit_propagation else None
+        x = self.execute_propagation(leave=leave) if orbit_propagation else None
         if x: out_info.extend(x)
         # if orbit_propagation: print("Finished orbit-propagation.")
 
         # Execute coverage calculation for all the spacecrafts (and their instruments and modes) in the mission.
         # if coverage_propagation: print("Executing coverage calculation...")
-        x = self.execute_coverage_calculator() if coverage_propagation else None
+        x = self.execute_coverage_calculator(leave=leave) if coverage_propagation else None
         if x: out_info.extend(x)
         # if coverage_propagation: print("Finished coverage calculation.")
 
         # execute datametrics calculation for all the spacecrafts (and their instruments and modes) in the mission.
         # if data_metrics_calculation: print("Executing datametrics calculation...")
-        x = self.execute_datametrics_calculator() if data_metrics_calculation else None
+        x = self.execute_datametrics_calculator(leave=leave) if data_metrics_calculation else None
         if x: out_info.extend(x)
         # if data_metrics_calculation: print("Finished datametrics calculation.")
 
         # execute ground-station contact finder for all the spacecrafts
         # if gs_contact_finder: print("Executing ground-station contact finding...")
-        x = self.execute_groundstation_contact_finder() if gs_contact_finder else None
+        x = self.execute_groundstation_contact_finder(leave=leave) if gs_contact_finder else None
         if x: out_info.extend(x)
         # if gs_contact_finder: print("Finished finding ground-station contacts.")
 
         # find inter-satellite contacts between all the satellites in the mission
         # if intersat_contact_finder: print("Executing inter-satellite contact finding...")
-        x = self.execute_intersatellite_contact_finder() if intersat_contact_finder else None
+        x = self.execute_intersatellite_contact_finder(leave=leave) if intersat_contact_finder else None
         if x: out_info.extend(x)
         # if intersat_contact_finder: print("Finished finding inter-satellite contacts.")
 
         # find eclipse times
         # if eclipse_finder: print("Executing eclipse finding...")
-        x = self.execute_eclipse_finder() if eclipse_finder else None
+        x = self.execute_eclipse_finder(leave=leave) if eclipse_finder else None
         if x: out_info.extend(x)
         # if eclipse_finder: print("Finished finding eclipse periods.")
     
         return out_info
             
-    def save_auto_grid(self):
+    def save_auto_grid(self, leave:bool=False):
         """ Save auto-grid data to file.
         """
         oi = [] # list of output-info objects associated with this execution
 
         if self.grid:
             # Save auto-grids to files
-            for grid_idx, grid in tqdm(enumerate(self.grid), desc="Saving auto-grid files", unit="grid"):
+            for grid_idx, grid in tqdm(enumerate(self.grid), desc="Saving auto-grid files", unit="grid", leave=leave):
                 if grid.filepath is None: # must be an auto-grid configuration, so filepath instance variable is None
                     fp = self.settings.outDir + '/grid' + str(grid_idx) + '.csv' # save the file with name according to the index.
                     x = grid.write_to_file(fp)
@@ -674,13 +674,13 @@ class Mission(Entity):
 
         return oi
 
-    def execute_propagation(self):
+    def execute_propagation(self, leave:bool=False):
         """ Execute orbit propagation for all spacecrafts in the mission.
             The list of output0info objects associated with this execution is returned.
         """
         oi = [] # list of output-info objects associated with this execution
         # execute orbit propagation for all satellites in the mission
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing orbit propagation", unit="sat"):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing orbit propagation", unit="sat", leave=leave):
             
             # make satellite directory
             sat_dir = self.settings.outDir + '/sat' + str(spc_idx) + '/'
@@ -700,7 +700,7 @@ class Mission(Entity):
 
         return oi
     
-    def execute_intersatellite_contact_finder(self):
+    def execute_intersatellite_contact_finder(self, leave:bool=False):
         """ Find contacts between spacecrafts in the mission. Orbit propagation for all spacecrafts should be 
             executed prior to this operation. The ``outputInfo`` instance variable shall be referred to locate the 
             state files produced from orbit propagation. 
@@ -715,7 +715,7 @@ class Mission(Entity):
         os.makedirs(intersat_comm_dir)
 
         # Iterate over all spacecrafts in the mission. If the state-file of a spacecraft cannot be located then the spacecraft is not considered.
-        for spc1_idx in tqdm(range(0, len(self.spacecraft)), desc="Finding inter-satellite contacts", unit="sat"):
+        for spc1_idx in tqdm(range(0, len(self.spacecraft)), desc="Finding inter-satellite contacts", unit="sat", leave=leave):
             spc1 = self.spacecraft[spc1_idx]
             spc1_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -750,7 +750,7 @@ class Mission(Entity):
 
         return oi
     
-    def execute_groundstation_contact_finder(self):
+    def execute_groundstation_contact_finder(self, leave:bool=False):
         """ Find contacts between spacecrafts and ground-stations in the mission. Orbit propagation for all spacecrafts should be 
             executed prior to this operation. The ``outputInfo`` instance variable shall be referred to locate the 
             state files produced from orbit propagation. The results are written in the same folder as that of the spacecraft-state files.
@@ -760,7 +760,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding ground-station contacts", unit="sat"):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding ground-station contacts", unit="sat", leave=leave):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -787,7 +787,7 @@ class Mission(Entity):
                     
         return oi
     
-    def execute_eclipse_finder(self):
+    def execute_eclipse_finder(self, leave:bool=False):
         """ Find eclipse times for the spacecrafts in the mission. Orbit propagation for all spacecrafts should be 
             executed prior to this operation. The ``outputInfo`` instance variable shall be referred to locate the 
             state files produced from orbit propagation. The results are written in the same folder as that of the spacecraft-state files.
@@ -797,7 +797,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding eclipse periods", unit="sat"):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding eclipse periods", unit="sat", leave=leave):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -820,7 +820,7 @@ class Mission(Entity):
                     
         return oi
 
-    def execute_coverage_calculator(self):
+    def execute_coverage_calculator(self, leave:bool=False):
         """ Execute coverage calculation for all the spacecrafts in the mission. The coverage-calculation type is indicated in the ``settings`` instance variable.
             Orbit propagation for all spacecrafts should be executed prior to this operation. The ``outputInfo`` instance variable shall be referred to locate the 
             state files produced from orbit propagation. The results are written in the same folder as that of the spacecraft-state files.
@@ -830,7 +830,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing coverage calculation", unit="sat"):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing coverage calculation", unit="sat", leave=leave):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -884,7 +884,7 @@ class Mission(Entity):
 
         return oi
                     
-    def execute_datametrics_calculator(self):
+    def execute_datametrics_calculator(self, leave:bool=False):
         """ Execute datametrics calculation for all the spacecrafts in the mission. 
             Orbit propagation and coverage calculation for all spacecrafts should be executed prior to this operation. 
             The ``outputInfo`` instance variable shall be referred to locate the state and access files produced by orbit propagation and coverage calculations. 
@@ -895,7 +895,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing data-metrics calculation", unit="sat"):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing data-metrics calculation", unit="sat", leave=leave):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
