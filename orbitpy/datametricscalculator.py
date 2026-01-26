@@ -7,7 +7,7 @@
 from collections import namedtuple
 import csv
 import pandas as pd
-
+from tqdm import tqdm
 
 from instrupy.util import Entity
 import orbitpy.util
@@ -215,7 +215,7 @@ class DataMetricsCalculator(Entity):
         
         # copy info rows from the original access file
         with open(acc_filepath, 'r') as f:
-            head = [next(f) for x in [0,1,2,3]] 
+            head = [next(f) for _ in [0,1,2,3]] 
 
         # erase any old file and create new one
         with open(out_datametrics_fl,'w') as f:
@@ -225,54 +225,95 @@ class DataMetricsCalculator(Entity):
                 else:
                     f.write(str(r))             
         
-        with open(out_datametrics_fl,'a+', newline='') as f:
-            w = csv.writer(f)
+        ############# IMPROVED RUNTIME CODE BLOCK #############
+        # merge access and state data and calculate data-metrics
+        merged_df = pd.merge(access_info_df, sat_state_df, left_on='time index', right_index=True, how='left')
 
-            # Iterate over all logged access events
-            header_written_flag = False
-            idx = 0
-            for idx in range(0,len(access_info_df)):       
+        # evaluate each access and calculate data-metrics
+        data_dicts = []
+        for idx,row in tqdm(merged_df.iterrows(), desc="Calculating data-metrics", 
+                            unit=" access", leave=False, total=len(merged_df)):
+            time_i = int(row["time index"])   
 
-                time_i = int(access_info_df.loc[idx]["time index"])   
+            if "GP index" in access_info_df.columns:
+                gp_i = int(row["GP index"]) if pd.notna(row["GP index"]) else None   
+            else:
+                gp_i = None
 
-                if "GP index" in access_info_df.columns:
-                    gp_i = int(access_info_df.loc[idx]["GP index"]) if pd.notna(access_info_df.loc[idx]["GP index"]) else None   
-                else:
-                    gp_i = None
+            if "pnt-opt index" in access_info_df.columns:
+                pnt_opt_i = int(row["pnt-opt index"]) if pd.notna(row["pnt-opt index"]) else None 
+            else:
+                pnt_opt_i = None
+            
+            # find the target coordinates. 
+            target_coords = { "lat [deg]" : float(row["lat [deg]"]), "lon [deg]" : float(row["lon [deg]"]) }
 
-                if "pnt-opt index" in access_info_df.columns:
-                    pnt_opt_i = int(access_info_df.loc[idx]["pnt-opt index"]) if pd.notna(access_info_df.loc[idx]["pnt-opt index"]) else None 
-                else:
-                    pnt_opt_i = None
-                
-                # find the target coordinates. 
-                target_coords = dict()
-                target_coords["lat [deg]"] = float(access_info_df.loc[idx]["lat [deg]"])
-                target_coords["lon [deg]"] = float(access_info_df.loc[idx]["lon [deg]"])   
+            # extract the satellite orbit state at the access time
+            sc_state_columns = [ "x [km]", "y [km]", "z [km]", "vx [km/s]", "vy [km/s]", "vz [km/s]"]
+            sc_orbit_state = {col : row[col] for col in sc_state_columns}
+            sc_orbit_state["time [JDUT1]"] = epoch_JDUT1 + time_i*step_size*1.0/86400.0 
 
-                # TODO: TEMPORARY 
-                #if not (target_coords["lat [deg]"] > 35 and target_coords["lat [deg]"] < 45 and target_coords["lon [deg]"] > 280 and target_coords["lon [deg]"] < 290):
-                #   continue           
-                # END TEMPORARY
-                
-                sc_orbit_state = dict()
-                sc_orbit_state["time [JDUT1]"] = epoch_JDUT1 + time_i*step_size*1.0/86400.0 
-                sc_orbit_state["x [km]"] = sat_state_df.loc[time_i]["x [km]"] 
-                sc_orbit_state["y [km]"] = sat_state_df.loc[time_i]["y [km]"] 
-                sc_orbit_state["z [km]"] = sat_state_df.loc[time_i]["z [km]"] 
-                sc_orbit_state["vx [km/s]"] = sat_state_df.loc[time_i]["vx [km/s]"] 
-                sc_orbit_state["vy [km/s]"] = sat_state_df.loc[time_i]["vy [km/s]"] 
-                sc_orbit_state["vz [km/s]"] = sat_state_df.loc[time_i]["vz [km/s]"] 
-
-                obsv_metrics = instru.calc_data_metrics(mode_id=mode_id, sc_orbit_state=sc_orbit_state, target_coords=target_coords) # calculate the data metrics specific to the instrument type
-                _v = dict({'time index':time_i, 'GP index': gp_i, 'pnt-opt index': pnt_opt_i, 'lat [deg]':round(target_coords["lat [deg]"],3), 'lon [deg]':round(target_coords["lon [deg]"],3)}, **obsv_metrics)
-                
-                if header_written_flag is False:
-                    w.writerow(_v.keys())    
-                    header_written_flag = True
-                w.writerow(_v.values())
-                idx = idx + 1
+            # calculate data-metrics
+            obsv_metrics = instru.calc_data_metrics(mode_id=mode_id, sc_orbit_state=sc_orbit_state, target_coords=target_coords) # calculate the data metrics specific to the instrument type
+            
+            # package metrics and append to list
+            _v = dict({'time index':time_i, 'GP index': gp_i, 'pnt-opt index': pnt_opt_i, 'lat [deg]':round(target_coords["lat [deg]"],3), 'lon [deg]':round(target_coords["lon [deg]"],3)}, **obsv_metrics)
+            data_dicts.append(_v)
+            
+        # write data-metrics to output file
+        out_datametrics_df = pd.DataFrame(data_dicts)
+        out_datametrics_df.to_csv(out_datametrics_fl, mode='a', index=False)
         
+        ############### ORIGINAL CODE BLOCK ################
+        # with open(out_datametrics_fl,'a+', newline='') as f:
+        #     w = csv.writer(f)
+
+        #     # Iterate over all logged access events
+        #     header_written_flag = False
+        #     idx = 0
+        #     for idx in range(0,len(access_info_df)):       
+
+        #         time_i = int(access_info_df.loc[idx]["time index"])   
+
+        #         if "GP index" in access_info_df.columns:
+        #             gp_i = int(access_info_df.loc[idx]["GP index"]) if pd.notna(access_info_df.loc[idx]["GP index"]) else None   
+        #         else:
+        #             gp_i = None
+
+        #         if "pnt-opt index" in access_info_df.columns:
+        #             pnt_opt_i = int(access_info_df.loc[idx]["pnt-opt index"]) if pd.notna(access_info_df.loc[idx]["pnt-opt index"]) else None 
+        #         else:
+        #             pnt_opt_i = None
+                
+        #         # find the target coordinates. 
+        #         target_coords = dict()
+        #         target_coords["lat [deg]"] = float(access_info_df.loc[idx]["lat [deg]"])
+        #         target_coords["lon [deg]"] = float(access_info_df.loc[idx]["lon [deg]"])   
+
+        #         # TODO: TEMPORARY 
+        #         #if not (target_coords["lat [deg]"] > 35 and target_coords["lat [deg]"] < 45 and target_coords["lon [deg]"] > 280 and target_coords["lon [deg]"] < 290):
+        #         #   continue           
+        #         # END TEMPORARY
+                
+        #         sc_orbit_state = dict()
+        #         sc_orbit_state["time [JDUT1]"] = epoch_JDUT1 + time_i*step_size*1.0/86400.0 
+        #         sc_orbit_state["x [km]"] = sat_state_df.loc[time_i]["x [km]"] 
+        #         sc_orbit_state["y [km]"] = sat_state_df.loc[time_i]["y [km]"] 
+        #         sc_orbit_state["z [km]"] = sat_state_df.loc[time_i]["z [km]"] 
+        #         sc_orbit_state["vx [km/s]"] = sat_state_df.loc[time_i]["vx [km/s]"] 
+        #         sc_orbit_state["vy [km/s]"] = sat_state_df.loc[time_i]["vy [km/s]"] 
+        #         sc_orbit_state["vz [km/s]"] = sat_state_df.loc[time_i]["vz [km/s]"] 
+
+        #         obsv_metrics = instru.calc_data_metrics(mode_id=mode_id, sc_orbit_state=sc_orbit_state, target_coords=target_coords) # calculate the data metrics specific to the instrument type
+        #         _v = dict({'time index':time_i, 'GP index': gp_i, 'pnt-opt index': pnt_opt_i, 'lat [deg]':round(target_coords["lat [deg]"],3), 'lon [deg]':round(target_coords["lon [deg]"],3)}, **obsv_metrics)
+                
+        #         if header_written_flag is False:
+        #             w.writerow(_v.keys())    
+        #             header_written_flag = True
+        #         w.writerow(_v.values())
+        #         idx = idx + 1
+        ####################################################
+
         return DataMetricsOutputInfo.from_dict({"spacecraftId": self.spacecraft._id,
                                                 "instruId": instru_id,
                                                 "modeId": mode_id,

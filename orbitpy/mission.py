@@ -680,7 +680,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # execute orbit propagation for all satellites in the mission
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing orbit propagation", unit="sat", leave=leave):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing orbit propagation", unit=" sat", leave=leave):
             
             # make satellite directory
             sat_dir = self.settings.outDir + '/sat' + str(spc_idx) + '/'
@@ -715,7 +715,7 @@ class Mission(Entity):
         os.makedirs(intersat_comm_dir)
 
         # Iterate over all spacecrafts in the mission. If the state-file of a spacecraft cannot be located then the spacecraft is not considered.
-        for spc1_idx in tqdm(range(0, len(self.spacecraft)), desc="Finding inter-satellite contacts", unit="sat", leave=leave):
+        for spc1_idx in tqdm(range(0, len(self.spacecraft)), desc="Finding inter-satellite contacts", unit=" sat", leave=leave):
             spc1 = self.spacecraft[spc1_idx]
             spc1_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -727,7 +727,7 @@ class Mission(Entity):
             spc1_state_cart_file = spc1_prop_out_info.stateCartFile
             
             # loop over the rest of the spacecrafts in the list (i.e. from the current spacecraft to the last spacecraft in the list)
-            for spc2_idx in tqdm(range(spc1_idx+1, len(self.spacecraft)), desc=f"Evaluating contacts for `SAT{spc1_idx}`", unit="sat", leave=False):
+            for spc2_idx in tqdm(range(spc1_idx+1, len(self.spacecraft)), desc=f"Evaluating contacts for `SAT{spc1_idx}`", unit=" sat", leave=False):
                 
                 spc2 = self.spacecraft[spc2_idx]
                 spc2_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
@@ -760,7 +760,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding ground-station contacts", unit="sat", leave=leave):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding ground-station contacts", unit=" sat", leave=leave):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -797,7 +797,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding eclipse periods", unit="sat", leave=leave):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Finding eclipse periods", unit=" sat", leave=leave):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -830,7 +830,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing coverage calculation", unit="sat", leave=leave):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing coverage calculation", unit=" sat", leave=leave):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
@@ -853,7 +853,7 @@ class Mission(Entity):
                                 warnings.warn('Grid not specified, skipping Grid Coverage calculations.')
                                 continue
                             # iterate over multiple grids
-                            for grid_idx, grid in enumerate(self.grid):
+                            for grid_idx, grid in tqdm(enumerate(self.grid), desc=f"Calculating coverage for grids", unit=" grid", leave=False):
                                 acc_fl = spc_dir + 'access_instru' + str(instru_idx) + '_mode' + str(mode_idx) + '_grid'+ str(grid_idx) + '.csv'
                                 cov_calc = GridCoverage(grid=grid, spacecraft=spc, state_cart_file=spc_state_cart_file)
                                 x = cov_calc.execute(instru_id=instru._id, mode_id=mode._id, use_field_of_regard=True, out_file_access=acc_fl, mid_access_only=self.settings.midAccessOnly)
@@ -870,7 +870,7 @@ class Mission(Entity):
                                 warnings.warn('Grid not specified, skipping Pointing Options With Grid Coverage calculations.')
                                 continue
                             # iterate over multiple grids
-                            for grid_idx, grid in enumerate(self.grid):
+                            for grid_idx, grid in tqdm(enumerate(self.grid), desc=f"Calculating coverage for grids", unit=" grid", leave=False):
 
                                 acc_fl = spc_dir + 'access_instru' + str(instru_idx) + '_mode' + str(mode_idx) + '_grid'+ str(grid_idx) + '.csv'
                                 cov_calc = PointingOptionsWithGridCoverage(grid=grid, spacecraft=spc, state_cart_file=spc_state_cart_file)
@@ -895,7 +895,7 @@ class Mission(Entity):
         """
         oi = [] # list of output-info objects associated with this execution
         # loop over all available spacecrafts
-        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing data-metrics calculation", unit="sat", leave=leave):
+        for spc_idx, spc in tqdm(enumerate(self.spacecraft), desc="Executing data-metrics calculation", unit=" sat", leave=leave):
 
             spc_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.PropagatorOutputInfo.value, 
