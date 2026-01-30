@@ -727,7 +727,8 @@ class Mission(Entity):
             spc1_state_cart_file = spc1_prop_out_info.stateCartFile
             
             # loop over the rest of the spacecrafts in the list (i.e. from the current spacecraft to the last spacecraft in the list)
-            for spc2_idx in tqdm(range(spc1_idx+1, len(self.spacecraft)), desc=f"Evaluating contacts for `SAT{spc1_idx}`", unit=" sat", leave=False):
+            # for spc2_idx in tqdm(range(spc1_idx+1, len(self.spacecraft)), desc=f"Evaluating contacts for `SAT{spc1_idx}`", unit=" sat", leave=False):
+            for spc2_idx in range(spc1_idx+1, len(self.spacecraft)):
                 
                 spc2 = self.spacecraft[spc2_idx]
                 spc2_prop_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
@@ -774,7 +775,8 @@ class Mission(Entity):
 
             # loop over all the ground-stations and calculate contacts
             if self.groundStation:
-                for gnd_stn_idx, gnd_stn in tqdm(enumerate(self.groundStation), desc="Evaluating contacts", unit="ground-station", leave=False):
+                # for gnd_stn_idx, gnd_stn in tqdm(enumerate(self.groundStation), desc="Evaluating contacts", unit="ground-station", leave=False):
+                for gnd_stn_idx, gnd_stn in enumerate(self.groundStation):
                     
                     out_gnd_stn_file = 'gndStn'+str(gnd_stn_idx)+'_contacts.csv'
                     x = ContactFinder.execute(spc, gnd_stn, spc_dir, spc_state_cart_file, None, out_gnd_stn_file, ContactFinder.OutType.INTERVAL, 0)
@@ -853,7 +855,8 @@ class Mission(Entity):
                                 warnings.warn('Grid not specified, skipping Grid Coverage calculations.')
                                 continue
                             # iterate over multiple grids
-                            for grid_idx, grid in tqdm(enumerate(self.grid), desc=f"Calculating coverage for grids", unit=" grid", leave=False):
+                            # for grid_idx, grid in tqdm(enumerate(self.grid), desc=f"Calculating coverage for grids", unit=" grid", leave=False):
+                            for grid_idx, grid in enumerate(self.grid):
                                 acc_fl = spc_dir + 'access_instru' + str(instru_idx) + '_mode' + str(mode_idx) + '_grid'+ str(grid_idx) + '.csv'
                                 cov_calc = GridCoverage(grid=grid, spacecraft=spc, state_cart_file=spc_state_cart_file)
                                 x = cov_calc.execute(instru_id=instru._id, mode_id=mode._id, use_field_of_regard=True, out_file_access=acc_fl, mid_access_only=self.settings.midAccessOnly)
@@ -870,8 +873,8 @@ class Mission(Entity):
                                 warnings.warn('Grid not specified, skipping Pointing Options With Grid Coverage calculations.')
                                 continue
                             # iterate over multiple grids
-                            for grid_idx, grid in tqdm(enumerate(self.grid), desc=f"Calculating coverage for grids", unit=" grid", leave=False):
-
+                            # for grid_idx, grid in tqdm(enumerate(self.grid), desc=f"Calculating coverage for grids", unit=" grid", leave=False):
+                            for grid_idx, grid in enumerate(self.grid):
                                 acc_fl = spc_dir + 'access_instru' + str(instru_idx) + '_mode' + str(mode_idx) + '_grid'+ str(grid_idx) + '.csv'
                                 cov_calc = PointingOptionsWithGridCoverage(grid=grid, spacecraft=spc, state_cart_file=spc_state_cart_file)
                                 x = cov_calc.execute(instru_id=instru._id, mode_id=mode._id, out_file_access=acc_fl, mid_access_only=self.settings.midAccessOnly)
@@ -918,8 +921,8 @@ class Mission(Entity):
                             if self.grid is None:
                                 warnings.warn('Grid not specified, skipping Grid Coverage, Data metrics calculations.')
                                 continue
-                            for grid_idx, grid in tqdm(enumerate(self.grid), desc="Calculating grid data-metrics", unit="grid", leave=False):
-
+                            # for grid_idx, grid in tqdm(enumerate(self.grid), desc="Calculating grid data-metrics", unit="grid", leave=False):
+                            for grid_idx, grid in enumerate(self.grid):
                                 cov_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.CoverageOutputInfo.value, 
                                                                                 coverage_type= "GRID COVERAGE", spacecraft_id=spc._id,  instru_id=instru._id, mode_id=mode._id, grid_id=grid._id)
@@ -935,7 +938,8 @@ class Mission(Entity):
                             if self.grid is None:
                                 warnings.warn('Grid not specified, skipping Grid Coverage, Data metrics calculations.')
                                 continue
-                            for grid_idx, grid in tqdm(enumerate(self.grid), desc="Calculating grid data-metrics", unit="grid", leave=False):
+                            # for grid_idx, grid in tqdm(enumerate(self.grid), desc="Calculating grid data-metrics", unit="grid", leave=False):
+                            for grid_idx, grid in enumerate(self.grid):
 
                                 cov_out_info = orbitpy.util.OutputInfoUtility.locate_output_info_object_in_list(out_info_list=self.outputInfo, 
                                                                                 out_info_type=OutputInfoUtility.OutputInfoType.CoverageOutputInfo.value, 
