@@ -14,6 +14,7 @@ setup(
     scripts=[ # TODO: remove this? Does not seem to serve any purpose. 
     'bin/run_mission.py'
     ],
-    install_requires=['numpy', 'instrupy', 'pandas', 'scipy', 'sphinx', 
-                      'sphinx_rtd_theme==0.5.2', 'propcov','deepdiff']
+    install_requires=['numpy', 'instrupy', 'pandas', 'scipy', 'sphinx', 'tqdm',
+                      'sphinx_rtd_theme==0.5.2', 'propcov','deepdiff', 'skyfield', 'matplotlib'],
+    long_description=readme(),
 )
