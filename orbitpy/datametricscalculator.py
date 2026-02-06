@@ -153,7 +153,7 @@ class DataMetricsCalculator(Entity):
         else:
             raise Exception('Access file info (i.e. the instance access_file_info attribute) is empty.')
 
-    def execute(self, out_datametrics_fl, instru_id=None, mode_id=None):
+    def execute(self, out_datametrics_fl, instru_id=None, mode_id=None, printouts=False):
         """ Execute data-metrics calculation for the specified instrument, mode in the spacecraft.
             This function iterates over the access file corresponding to the specified instrument, mode and calculates the data-metrics 
             for each access. The satellite state data is extracted from the satellite state file (CARTESIAN_EARTH_CENTERED_INERTIAL) corresponding 
@@ -232,7 +232,8 @@ class DataMetricsCalculator(Entity):
         # evaluate each access and calculate data-metrics
         data_dicts = []
         for idx,row in tqdm(merged_df.iterrows(), desc="Calculating data-metrics", 
-                            unit=" access", leave=False, total=len(merged_df)):
+                            unit=" access", leave=False, total=len(merged_df),
+                            disable=not printouts):
             time_i = int(row["time index"])   
 
             if "GP index" in access_info_df.columns:
